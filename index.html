@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  <title>Camera Filter Frame</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      position: relative;
+      font-family: sans-serif;
+    }
+
+    video, canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+    }
+
+    #frame {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      pointer-events: none;
+    }
+
+    .buttons {
+      position: absolute;
+      bottom: 25px;
+      display: flex;
+      gap: 15px;
+      z-index: 3;
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.9);
+      border: none;
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-size: 18px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #ffcc00;
+      transform: scale(1.05);
+    }
+
+    #download {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <video id="camera" autoplay playsinline></video>
+  <img id="frame" src="filter-frame.png" alt="Frame Overlay">
+  <canvas id="snapshot"></canvas>
+
+  <div class="buttons">
+    <button id="capture">📸 Capture</button>
+    <button id="download">⬇️ Download</button>
+  </div>
+
+  <script>
+    const camera = document.getElementById('camera');
+    const canvas = document.getElementById('snapshot');
+    const captureBtn = document.getElementById('capture');
+    const downloadBtn = document.getElementById('download');
+    const frame = document.getElementById('frame');
+
+    // Start camera (mobile-friendly)
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" } // front camera
+        });
+        camera.srcObject = stream;
+      } catch (err) {
+        alert("Camera access denied or unavailable.");
+      }
+    }
+
+    startCamera();
+
+    // Capture and show download
+    captureBtn.addEventListener("click", () => {
+      const context = canvas.getContext("2d");
+      canvas.width = camera.videoWidth;
+      canvas.height = camera.videoHeight;
+
+      // Draw live camera
+      context.drawImage(camera, 0, 0, canvas.width, canvas.height);
+      // Draw overlay frame
+      context.drawImage(frame, 0, 0, canvas.width, canvas.height);
+
+      // Prepare image for download
+      const dataUrl = canvas.toDataURL("image/png");
+      downloadBtn.href = dataUrl;
+      downloadBtn.download = "photo-with-frame.png";
+      downloadBtn.style.display = "inline-block";
+
+      // Preview the result
+      const newTab = window.open();
+      newTab.document.write(`<img src="${dataUrl}" style="width:100%">`);
+    });
+  </script>
+</body>
+</html>

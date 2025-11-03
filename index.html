@@ -2,56 +2,62 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-  <title>Camera Capture</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camera Capture Box</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
       padding: 0;
-      background: #000;
-      overflow: hidden;
+      background: #111;
+      color: #fff;
+      font-family: sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
-      position: relative;
-      font-family: sans-serif;
+      overflow: hidden;
     }
 
-    video, canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+    .camera-container {
+      position: relative;
+      width: 90vw;
+      max-width: 400px;
+      aspect-ratio: 3/4;
+      border: 3px solid #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    video, img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
     }
 
+    #capturedImage {
+      display: none;
+    }
+
     .buttons {
-      position: absolute;
-      bottom: 25px;
+      margin-top: 20px;
       display: flex;
-      justify-content: center;
-      width: 100%;
-      z-index: 3;
+      gap: 10px;
     }
 
     button, a.button {
-      background: rgba(255, 255, 255, 0.9);
+      background: #fff;
+      color: #000;
       border: none;
-      padding: 14px 28px;
-      border-radius: 14px;
-      font-size: 18px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
       cursor: pointer;
       text-decoration: none;
-      color: #000;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-      transition: 0.2s;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+      transition: all 0.2s;
     }
 
     button:hover, a.button:hover {
@@ -59,62 +65,83 @@
       transform: scale(1.05);
     }
 
-    #download {
+    #download, #retake {
       display: none;
+    }
+
+    .notice {
+      font-size: 14px;
+      color: #ccc;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <video id="camera" autoplay playsinline></video>
-  <canvas id="snapshot"></canvas>
+  <div class="camera-container">
+    <video id="camera" autoplay playsinline></video>
+    <img id="capturedImage" alt="Captured Photo">
+  </div>
 
   <div class="buttons">
     <button id="capture">📸 Capture</button>
+    <button id="retake">🔄 Retake</button>
     <a id="download" class="button" href="#" download="photo.png">⬇️ Download</a>
   </div>
 
+  <p class="notice">⚠️ Note: Works best on HTTPS (Netlify, GitHub Pages, etc.)</p>
+
   <script>
     const camera = document.getElementById('camera');
-    const canvas = document.getElementById('snapshot');
+    const capturedImage = document.getElementById('capturedImage');
     const captureBtn = document.getElementById('capture');
+    const retakeBtn = document.getElementById('retake');
     const downloadBtn = document.getElementById('download');
+    let stream;
 
-    // Start the camera (front-facing)
+    // Start camera
     async function startCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" }
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false
         });
         camera.srcObject = stream;
       } catch (err) {
-        alert("Camera access denied or unavailable.");
+        alert("Camera access denied or not supported. Please use HTTPS or allow camera access.");
+        console.error(err);
       }
     }
 
     startCamera();
 
-    // When "Capture" button is clicked
+    // Capture image
     captureBtn.addEventListener("click", () => {
-      const context = canvas.getContext("2d");
+      const canvas = document.createElement("canvas");
       canvas.width = camera.videoWidth;
       canvas.height = camera.videoHeight;
+      const ctx = canvas.getContext("2d");
 
       // Draw current video frame
-      context.drawImage(camera, 0, 0, canvas.width, canvas.height);
-
-      // Convert to image URL
+      ctx.drawImage(camera, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL("image/png");
 
-      // Set download link
+      capturedImage.src = dataUrl;
+      capturedImage.style.display = "block";
+      camera.style.display = "none";
+
       downloadBtn.href = dataUrl;
-
-      // Show Download button, hide Capture
-      captureBtn.style.display = "none";
       downloadBtn.style.display = "inline-block";
+      retakeBtn.style.display = "inline-block";
+      captureBtn.style.display = "none";
+    });
 
-      // Optional: preview the result in new tab
-      const newTab = window.open();
-      newTab.document.write(`<img src="${dataUrl}" style="width:100%">`);
+    // Retake photo
+    retakeBtn.addEventListener("click", () => {
+      capturedImage.style.display = "none";
+      camera.style.display = "block";
+      retakeBtn.style.display = "none";
+      downloadBtn.style.display = "none";
+      captureBtn.style.display = "inline-block";
     });
   </script>
 </body>

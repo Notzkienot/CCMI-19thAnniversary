@@ -36,15 +36,16 @@
       position: absolute;
       bottom: 25px;
       display: flex;
-      gap: 15px;
+      justify-content: center;
+      width: 100%;
       z-index: 3;
     }
 
     button, a.button {
       background: rgba(255, 255, 255, 0.9);
       border: none;
-      padding: 12px 22px;
-      border-radius: 12px;
+      padding: 14px 28px;
+      border-radius: 14px;
       font-size: 18px;
       cursor: pointer;
       text-decoration: none;
@@ -78,7 +79,7 @@
     const captureBtn = document.getElementById('capture');
     const downloadBtn = document.getElementById('download');
 
-    // Start camera (front-facing by default)
+    // Start the camera (front-facing)
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -92,24 +93,25 @@
 
     startCamera();
 
-    // Capture and show download link
+    // When "Capture" button is clicked
     captureBtn.addEventListener("click", () => {
       const context = canvas.getContext("2d");
       canvas.width = camera.videoWidth;
       canvas.height = camera.videoHeight;
 
-      // Draw camera frame to canvas
+      // Draw current video frame
       context.drawImage(camera, 0, 0, canvas.width, canvas.height);
 
-      // Create image data URL
+      // Convert to image URL
       const dataUrl = canvas.toDataURL("image/png");
+
+      // Set download link
       downloadBtn.href = dataUrl;
+
+      // Show Download button, hide Capture
+      captureBtn.style.display = "none";
       downloadBtn.style.display = "inline-block";
 
-      // Optional: preview image in new tab
+      // Optional: preview the result in new tab
       const newTab = window.open();
-      newTab.document.write(`<img src="${dataUrl}" style="width:100%">`);
-    });
-  </script>
-</body>
-</html>
+      newTab.document.

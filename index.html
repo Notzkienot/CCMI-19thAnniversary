@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-  <title>Camera Filter Frame</title>
+  <title>Camera Capture</title>
   <style>
     * {
       box-sizing: border-box;
@@ -30,16 +30,6 @@
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-    }
-
-    #frame {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      pointer-events: none;
     }
 
     .buttons {
@@ -75,12 +65,11 @@
 </head>
 <body>
   <video id="camera" autoplay playsinline></video>
-  <img id="frame" src="filter-frame.png" alt="Frame Overlay">
   <canvas id="snapshot"></canvas>
 
   <div class="buttons">
     <button id="capture">📸 Capture</button>
-    <a id="download" class="button" href="#" download="photo-with-frame.png">⬇️ Download</a>
+    <a id="download" class="button" href="#" download="photo.png">⬇️ Download</a>
   </div>
 
   <script>
@@ -88,13 +77,12 @@
     const canvas = document.getElementById('snapshot');
     const captureBtn = document.getElementById('capture');
     const downloadBtn = document.getElementById('download');
-    const frame = document.getElementById('frame');
 
-    // Start camera (mobile friendly)
+    // Start camera (front-facing by default)
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" } // front camera
+          video: { facingMode: "user" }
         });
         camera.srcObject = stream;
       } catch (err) {
@@ -104,23 +92,21 @@
 
     startCamera();
 
-    // Capture and show download
+    // Capture and show download link
     captureBtn.addEventListener("click", () => {
       const context = canvas.getContext("2d");
       canvas.width = camera.videoWidth;
       canvas.height = camera.videoHeight;
 
-      // Draw live camera
+      // Draw camera frame to canvas
       context.drawImage(camera, 0, 0, canvas.width, canvas.height);
-      // Draw overlay frame
-      context.drawImage(frame, 0, 0, canvas.width, canvas.height);
 
-      // Convert to image
+      // Create image data URL
       const dataUrl = canvas.toDataURL("image/png");
       downloadBtn.href = dataUrl;
       downloadBtn.style.display = "inline-block";
 
-      // Open preview
+      // Optional: preview image in new tab
       const newTab = window.open();
       newTab.document.write(`<img src="${dataUrl}" style="width:100%">`);
     });

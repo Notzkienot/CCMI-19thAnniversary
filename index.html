@@ -130,116 +130,100 @@
 
   <!-- face-api.js -->
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+const video = document.getElementById('camera');
+const imgPreview = document.getElementById('capturedImage');
+const movingText = document.getElementById('movingText');
+const captureBtn = document.getElementById('capture');
+const retakeBtn = document.getElementById('retake');
+const downloadBtn = document.getElementById('download');
+const cameraBox = document.getElementById('cameraBox');
+const loadingOverlay = document.getElementById('loadingOverlay');
 
-  <script>
-    const video = document.getElementById('camera');
-    const imgPreview = document.getElementById('capturedImage');
-    const movingText = document.getElementById('movingText');
-    const captureBtn = document.getElementById('capture');
-    const retakeBtn = document.getElementById('retake');
-    const downloadBtn = document.getElementById('download');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const cameraBox = document.getElementById('cameraBox');
+let stream;
+let runTrack = false;
 
-    let stream;
-    let tracking = true;
-
-    async function startCamera() {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-      video.srcObject = stream;
-      return video.play();
-    }
-
-    async function loadModels() {
-      const MODEL_URL = './models';
-      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
-      console.log("✅ Models loaded successfully");
-    }
-
-    async function trackFace() {
-      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
-      const boxW = cameraBox.clientWidth;
-      const boxH = cameraBox.clientHeight;
-      let tx = boxW / 2, ty = boxH / 2;
-
-      const loop = async () => {
-        if (!tracking) return;
-
-        const result = await faceapi.detectSingleFace(video, options).withFaceLandmarks(true);
-        if (result && result.landmarks) {
-          const nose = result.landmarks.getNose();
-          if (nose.length > 0) {
-            const cx = result.detection.box.x + result.detection.box.width / 2;
-            const cy = nose[0].y - 100; // Move text ABOVE the head
-
-            const scaleX = boxW / video.videoWidth;
-            const scaleY = boxH / video.videoHeight;
-            tx = tx + (cx * scaleX - tx) * 0.25;
-            ty = ty + (cy * scaleY - ty) * 0.25;
-
-            movingText.style.left = `${tx}px`;
-            movingText.style.top = `${ty}px`;
-          }
-        }
-        requestAnimationFrame(loop);
-      };
-      requestAnimationFrame(loop);
-    }
-
-    async function init() {
-      try {
-        await loadModels();
-        await startCamera();
-        loadingOverlay.style.display = 'none';
-        trackFace();
-      } catch (err) {
-        alert('❌ Camera or model load failed. Check HTTPS and model filenames.');
-        console.error(err);
-      }
-    }
-
-    init();
-
-    captureBtn.addEventListener('click', () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Add text overlay
-      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      grad.addColorStop(0, '#2b0047');
-      grad.addColorStop(1, '#c77dff');
-      ctx.font = `800 ${Math.round(canvas.width * 0.07)}px Poppins`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillStyle = grad;
-      ctx.shadowColor = 'rgba(255,215,0,0.6)';
-      ctx.shadowBlur = 20;
-      ctx.fillText('CCMI 19th Anniversary', canvas.width / 2, canvas.height * 0.2);
-
-      const dataUrl = canvas.toDataURL('image/png');
-      imgPreview.src = dataUrl;
-      imgPreview.style.display = 'block';
-      video.style.display = 'none';
-      downloadBtn.href = dataUrl;
-      downloadBtn.style.display = 'inline-block';
-      retakeBtn.style.display = 'inline-block';
-      captureBtn.style.display = 'none';
-      tracking = false;
+// ✅ Start camera
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user' },
+      audio: false
     });
+    video.srcObject = stream;
+    await video.play();
+  } catch (err) {
+    console.error("Camera start error:", err);
+    throw new Error("Camera access failed");
+  }
+}
 
-    retakeBtn.addEventListener('click', () => {
-      imgPreview.style.display = 'none';
-      video.style.display = 'block';
-      downloadBtn.style.display = 'none';
-      retakeBtn.style.display = 'none';
-      captureBtn.style.display = 'inline-block';
-      tracking = true;
-      trackFace();
-    });
-  </script>
+// ✅ Load your models (your file names)
+async function loadModels() {
+  try {
+    console.log("Loading models...");
+    await faceapi.nets.tinyFaceDetector.loadFromUri('./models/');
+    await faceapi.nets.faceLandmark68Net.loadFromUri('./models/');
+    console.log("✅ Models loaded successfully!");
+  } catch (err) {
+    console.error("Model load error:", err);
+    throw err;
+  }
+}
+
+// Helper function
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// ✅ Face tracking
+async function trackFace() {
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+  let tx = cameraBox.clientWidth / 2;
+  let ty = cameraBox.clientHeight / 2;
+
+  const loop = async () => {
+    if (!runTrack) return;
+
+    const result = await faceapi.detectSingleFace(video, options).withFaceLandmarks();
+    if (result && result.landmarks) {
+      const nose = result.landmarks.getNose();
+      const headTopY = nose[0].y - 120; // Move text above the head
+      const cx = result.detection.box.x + result.detection.box.width / 2;
+      const cy = headTopY;
+
+      tx = lerp(tx, cx, 0.25);
+      ty = lerp(ty, cy, 0.25);
+
+      const scaleX = cameraBox.clientWidth / video.videoWidth;
+      const scaleY = cameraBox.clientHeight / video.videoHeight;
+
+      movingText.style.left = `${tx * scaleX}px`;
+      movingText.style.top = `${ty * scaleY}px`;
+      movingText.style.transform = 'translate(-50%, -100%)';
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
+// ✅ Initialize
+async function init() {
+  try {
+    await loadModels();
+    await startCamera();
+    loadingOverlay.style.opacity = 0;
+    setTimeout(() => (loadingOverlay.style.display = 'none'), 600);
+    runTrack = true;
+    trackFace();
+  } catch (e) {
+    alert('Camera or model load failed. Check HTTPS and model file names.');
+    console.error(e);
+  }
+}
+
+init();
+</script>
+
 </body>
 </html>

@@ -79,6 +79,11 @@
       box-shadow: 0 0 14px rgba(255, 215, 0, 0.6);
     }
     #download, #retake { display: none; }
+    #status {
+      margin-top: 10px;
+      font-size: 15px;
+      color: #ffe066;
+    }
   </style>
 </head>
 <body>
@@ -94,6 +99,8 @@
     <a id="download" class="button" href="#" download="photo.png">⬇️ Download</a>
   </div>
 
+  <div id="status">Loading models...</div>
+
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script>
     const video = document.getElementById('camera');
@@ -102,21 +109,37 @@
     const captureBtn = document.getElementById('capture');
     const retakeBtn = document.getElementById('retake');
     const downloadBtn = document.getElementById('download');
+    const statusText = document.getElementById('status');
     const cameraBox = document.getElementById('cameraBox');
 
     let stream, runTrack = false;
 
     async function startCamera() {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-      video.srcObject = stream;
-      await video.play();
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        video.srcObject = stream;
+        await video.play();
+        return true;
+      } catch (err) {
+        console.error('Camera error:', err);
+        return false;
+      }
     }
 
-    async function loadModels() {
-      console.log("Loading models...");
-      await faceapi.nets.tinyFaceDetector.loadFromUri('./models/');
-      await faceapi.nets.faceLandmark68TinyNet.loadFromUri('./models/');
-      console.log("✅ Models loaded successfully!");
+    async function loadModelsWithRetry(retries = 3) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          console.log("Loading models (attempt " + (i+1) + ")...");
+          await faceapi.nets.tinyFaceDetector.loadFromUri('./models/');
+          await faceapi.nets.faceLandmark68TinyNet.loadFromUri('./models/');
+          console.log("✅ Models loaded successfully!");
+          return true;
+        } catch (e) {
+          console.error("Model load failed (attempt " + (i+1) + "):", e);
+          await new Promise(res => setTimeout(res, 1000));
+        }
+      }
+      return false;
     }
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -172,15 +195,18 @@
     };
 
     async function init() {
-      try {
-        await loadModels();
-        await startCamera();
-        runTrack = true;
-        trackFace();
-      } catch (err) {
+      const modelsLoaded = await loadModelsWithRetry();
+      const cameraReady = await startCamera();
+
+      if (!modelsLoaded || !cameraReady) {
+        statusText.textContent = "❌ Camera or model load failed. Check HTTPS and model filenames.";
         alert("Camera or model load failed. Check HTTPS and model filenames.");
-        console.error(err);
+        return;
       }
+
+      statusText.textContent = "✅ Models loaded — camera active!";
+      runTrack = true;
+      trackFace();
     }
 
     init();

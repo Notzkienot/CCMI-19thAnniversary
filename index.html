@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>CCMI 19th Anniversary – Camera with Head-Tracking Text</title>
   <style>
-    /* --- Page background: dark→light purple with subtle gold sparkle --- */
     body {
       margin: 0;
       height: 100vh;
@@ -44,7 +43,6 @@
       100% { transform: translate(0,0); }
     }
 
-    /* --- Camera box --- */
     .camera-container {
       position: relative;
       width: 92vw;
@@ -65,19 +63,16 @@
     }
     img.preview { display: none; }
 
-    /* --- Moving text overlay that follows your head (DOM element) --- */
     .moving-text {
       position: absolute;
       left: 50%;
       top: 50%;
-      transform: translate(-50%, -50%); /* centered by default; JS repositions */
+      transform: translate(-50%, -50%);
       font-weight: 800;
       text-align: center;
       pointer-events: none;
       white-space: nowrap;
       z-index: 2;
-
-      /* Gradient + shimmer & gold glow */
       font-size: clamp(18px, 6vw, 32px);
       background: linear-gradient(135deg, #2b0047, #7b2cbf, #c77dff);
       background-size: 200% 200%;
@@ -90,7 +85,6 @@
         0 0 8px rgba(255,215,0,0.35);
     }
     .moving-text::after {
-      /* Soft golden sweep shimmer */
       content: "";
       position: absolute;
       inset: 0;
@@ -109,7 +103,6 @@
       100% { transform: translateX(120%); }
     }
 
-    /* --- Buttons --- */
     .controls {
       margin-top: 16px;
       display: flex;
@@ -157,9 +150,9 @@
     <a id="download" class="button" href="#" download="photo.png">⬇️ Download</a>
   </div>
 
-  <div class="note">Tip: Use HTTPS (Netlify, GitHub Pages, Vercel) for camera access.</div>
+  <div class="note">Tip: Use HTTPS (GitHub Pages, Netlify, Vercel) for camera access.</div>
 
-  <!-- face-api.js from CDN -->
+  <!-- face-api.js -->
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
   <script>
@@ -184,9 +177,20 @@
     }
 
     async function loadModels() {
-      // Load models from ./models/
-      await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
+      // Custom model file loading
+      const [tinyManifest, tinyWeights, landmarkManifest, landmarkWeights] = await Promise.all([
+        fetch('./models/tiny_face_detector_model-weights_manifest.json').then(r => r.json()),
+        fetch('./models/tiny_face_detector_model.bin').then(r => r.arrayBuffer()),
+        fetch('./models/face_landmark_68_model-weights_manifest.json').then(r => r.json()),
+        fetch('./models/face_landmark_68_tiny_model.bin').then(r => r.arrayBuffer())
+      ]);
+
+      // Manually register weight maps
+      const tinyMap = await faceapi.loadWeightMapFromWeightManifest(tinyManifest, './models', new Uint8Array(tinyWeights));
+      const landmarkMap = await faceapi.loadWeightMapFromWeightManifest(landmarkManifest, './models', new Uint8Array(landmarkWeights));
+
+      await faceapi.nets.tinyFaceDetector.loadFromWeightMap(tinyMap);
+      await faceapi.nets.faceLandmark68Net.loadFromWeightMap(landmarkMap);
     }
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -198,23 +202,19 @@
 
       const loop = async () => {
         if (!runTrack) return;
-
         const result = await faceapi
           .detectSingleFace(video, options)
           .withFaceLandmarks();
 
         if (result && result.landmarks) {
-          // Use midpoint between eyes as anchor, then place text slightly above
           const leftEye = result.landmarks.getLeftEye();
           const rightEye = result.landmarks.getRightEye();
           const cx = (leftEye[0].x + rightEye[3].x) / 2;
           const cy = (leftEye[0].y + rightEye[3].y) / 2;
 
-          // Smooth motion
           tx = lerp(tx, cx, 0.25);
-          ty = lerp(ty, cy - 40, 0.25); // slightly above eyes
+          ty = lerp(ty, cy - 40, 0.25);
 
-          // Scale from video pixels to displayed box size
           const scaleX = cameraBox.clientWidth / video.videoWidth;
           const scaleY = cameraBox.clientHeight / video.videoHeight;
 
@@ -234,81 +234,63 @@
         runTrack = true;
         trackFace();
       } catch (e) {
-        alert('Camera or model load failed. Ensure HTTPS and models/ are in place.');
+        alert('Camera or model load failed. Check HTTPS and model file names.');
         console.error(e);
       }
     }
 
     init();
 
-    // Capture → bake text into photo
+    // Capture photo
     captureBtn.addEventListener('click', () => {
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
-
-      // Draw current camera frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Draw moving text onto canvas (replicate gradient & glow)
-      // Create gradient similar to CSS
       const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
       grad.addColorStop(0, '#2b0047');
       grad.addColorStop(0.5, '#7b2cbf');
       grad.addColorStop(1, '#c77dff');
 
-      // Convert displayed text position back to canvas coordinates
-      // Find current on-screen position
       const boxW = cameraBox.clientWidth;
       const boxH = cameraBox.clientHeight;
       const scaleX = canvas.width / boxW;
       const scaleY = canvas.height / boxH;
-
       const rect = movingText.getBoundingClientRect();
       const parentRect = cameraBox.getBoundingClientRect();
       const xScreen = rect.left - parentRect.left + rect.width / 2;
-      const yScreen = rect.top - parentRect.top; // baseline adjustment below
-
+      const yScreen = rect.top - parentRect.top;
       const x = xScreen * scaleX;
       const y = yScreen * scaleY;
-
-      // Text styling
       const fontSizePx = Math.max(24, Math.min(56, Math.round(boxW * 0.08)));
+
       ctx.font = `800 ${Math.round(fontSizePx * scaleX)}px Poppins, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       ctx.fillStyle = grad;
-
-      // Glow
       ctx.shadowColor = 'rgba(255,215,0,0.6)';
       ctx.shadowBlur = 20;
-
       ctx.fillText('CCMI 19th Anniversary', x, y);
 
-      // Export data URL
       const dataUrl = canvas.toDataURL('image/png');
       imgPreview.src = dataUrl;
       imgPreview.style.display = 'block';
       video.style.display = 'none';
-
       downloadBtn.href = dataUrl;
       downloadBtn.style.display = 'inline-block';
       retakeBtn.style.display = 'inline-block';
       captureBtn.style.display = 'none';
-
-      // Pause tracking while preview is shown
       runTrack = false;
     });
 
-    // Retake → resume camera & tracking
     retakeBtn.addEventListener('click', async () => {
       imgPreview.style.display = 'none';
       video.style.display = 'block';
       downloadBtn.style.display = 'none';
       retakeBtn.style.display = 'none';
       captureBtn.style.display = 'inline-block';
-
       if (!stream) await startCamera();
       runTrack = true;
       trackFace();

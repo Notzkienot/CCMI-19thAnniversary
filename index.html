@@ -2,83 +2,120 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Camera Capture Box - Gradient Background</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>CCMI 19th Anniversary – Camera with Head-Tracking Text</title>
   <style>
+    /* --- Page background: dark→light purple with subtle gold sparkle --- */
     body {
       margin: 0;
-      padding: 0;
       height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-family: "Poppins", sans-serif;
+      font-family: "Poppins", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       color: #fff;
-      background: radial-gradient(circle at top left, #ffd70033, transparent 40%),
-                  linear-gradient(135deg, #2b0047, #7b2cbf, #c77dff);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(255,215,0,0.22), transparent 38%),
+        linear-gradient(135deg, #2b0047, #7b2cbf, #c77dff);
       background-size: 400% 400%;
-      animation: gradientMove 10s ease infinite;
+      animation: bgMove 10s ease infinite;
       overflow: hidden;
       position: relative;
     }
-
-    /* Subtle sparkle animation using pseudo-elements */
     body::before {
       content: "";
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background-image: radial-gradient(#ffd70055 1px, transparent 1px);
+      position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,215,0,0.35) 1px, transparent 1px);
       background-size: 3px 3px;
       animation: sparkle 4s linear infinite;
-      z-index: 0;
+      opacity: 0.25;
       pointer-events: none;
-      opacity: 0.3;
+      z-index: 0;
     }
-
-    @keyframes gradientMove {
+    @keyframes bgMove {
       0% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
       100% { background-position: 0% 50%; }
     }
-
     @keyframes sparkle {
-      0% { transform: translate(0, 0); }
+      0% { transform: translate(0,0); }
       50% { transform: translate(-1%, 1%); }
-      100% { transform: translate(0, 0); }
+      100% { transform: translate(0,0); }
     }
 
+    /* --- Camera box --- */
     .camera-container {
       position: relative;
-      width: 90vw;
-      max-width: 400px;
+      width: 92vw;
+      max-width: 420px;
       aspect-ratio: 3/4;
       border: 3px solid gold;
       border-radius: 16px;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.45);
       overflow: hidden;
-      box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
       background: #000;
-      z-index: 2;
+      z-index: 1;
     }
-
-    video, img {
+    video, img.preview {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      display: block;
+    }
+    img.preview { display: none; }
+
+    /* --- Moving text overlay that follows your head (DOM element) --- */
+    .moving-text {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%); /* centered by default; JS repositions */
+      font-weight: 800;
+      text-align: center;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 2;
+
+      /* Gradient + shimmer & gold glow */
+      font-size: clamp(18px, 6vw, 32px);
+      background: linear-gradient(135deg, #2b0047, #7b2cbf, #c77dff);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: textGrad 4s ease infinite;
+      text-shadow:
+        0 0 1px rgba(255,215,0,0.6),
+        0 0 8px rgba(255,215,0,0.35);
+    }
+    .moving-text::after {
+      /* Soft golden sweep shimmer */
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 0%, rgba(255, 239, 159, 0.45) 50%, transparent 100%);
+      mix-blend-mode: screen;
+      animation: shimmer 2.8s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes textGrad {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(120%); }
     }
 
-    #capturedImage {
-      display: none;
-    }
-
-    .buttons {
-      margin-top: 20px;
+    /* --- Buttons --- */
+    .controls {
+      margin-top: 16px;
       display: flex;
       gap: 12px;
-      z-index: 3;
+      z-index: 2;
     }
-
     button, a.button {
       background: linear-gradient(135deg, gold, #ffef9f);
       color: #4b0082;
@@ -86,92 +123,195 @@
       padding: 12px 28px;
       border-radius: 10px;
       font-size: 16px;
-      font-weight: bold;
+      font-weight: 700;
       cursor: pointer;
       text-decoration: none;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-      transition: all 0.2s;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
-
     button:hover, a.button:hover {
-      transform: scale(1.05);
-      box-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+      transform: scale(1.04);
+      box-shadow: 0 0 14px rgba(255, 215, 0, 0.6);
     }
+    #download, #retake { display: none; }
 
-    #download, #retake {
-      display: none;
-    }
-
-    .notice {
-      font-size: 14px;
+    .note {
+      margin-top: 8px;
+      font-size: 12px;
       color: #ffefc3;
-      margin-top: 10px;
       text-shadow: 0 0 4px #000;
-      z-index: 3;
+      opacity: 0.9;
     }
   </style>
 </head>
 <body>
-  <div class="camera-container">
+  <div class="camera-container" id="cameraBox">
     <video id="camera" autoplay playsinline></video>
-    <img id="capturedImage" alt="Captured Photo">
+    <img id="capturedImage" class="preview" alt="Captured" />
+    <div id="movingText" class="moving-text">CCMI 19th Anniversary</div>
   </div>
 
-  <div class="buttons">
+  <div class="controls">
     <button id="capture">📸 Capture</button>
     <button id="retake">🔄 Retake</button>
     <a id="download" class="button" href="#" download="photo.png">⬇️ Download</a>
   </div>
 
-  <p class="notice">⚠️ Eka Judgemental Sample yapamu yan!.)</p>
+  <div class="note">Tip: Use HTTPS (Netlify, GitHub Pages, Vercel) for camera access.</div>
+
+  <!-- face-api.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
   <script>
-    const camera = document.getElementById('camera');
-    const capturedImage = document.getElementById('capturedImage');
+    const video = document.getElementById('camera');
+    const imgPreview = document.getElementById('capturedImage');
+    const movingText = document.getElementById('movingText');
     const captureBtn = document.getElementById('capture');
-    const retakeBtn = document.getElementById('retake');
+    const retakeBtn  = document.getElementById('retake');
     const downloadBtn = document.getElementById('download');
+    const cameraBox = document.getElementById('cameraBox');
+
     let stream;
+    let runTrack = false;
 
     async function startCamera() {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+    }
+
+    async function loadModels() {
+      // Load models from ./models/
+      await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    async function trackFace() {
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+      let tx = cameraBox.clientWidth / 2;
+      let ty = cameraBox.clientHeight / 2;
+
+      const loop = async () => {
+        if (!runTrack) return;
+
+        const result = await faceapi
+          .detectSingleFace(video, options)
+          .withFaceLandmarks();
+
+        if (result && result.landmarks) {
+          // Use midpoint between eyes as anchor, then place text slightly above
+          const leftEye = result.landmarks.getLeftEye();
+          const rightEye = result.landmarks.getRightEye();
+          const cx = (leftEye[0].x + rightEye[3].x) / 2;
+          const cy = (leftEye[0].y + rightEye[3].y) / 2;
+
+          // Smooth motion
+          tx = lerp(tx, cx, 0.25);
+          ty = lerp(ty, cy - 40, 0.25); // slightly above eyes
+
+          // Scale from video pixels to displayed box size
+          const scaleX = cameraBox.clientWidth / video.videoWidth;
+          const scaleY = cameraBox.clientHeight / video.videoHeight;
+
+          movingText.style.left = `${tx * scaleX}px`;
+          movingText.style.top  = `${ty * scaleY}px`;
+          movingText.style.transform = 'translate(-50%, -100%)';
+        }
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    }
+
+    async function init() {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
-          audio: false
-        });
-        camera.srcObject = stream;
-      } catch (err) {
-        alert("Camera access denied or not supported. Please use HTTPS or allow camera access.");
-        console.error(err);
+        await loadModels();
+        await startCamera();
+        runTrack = true;
+        trackFace();
+      } catch (e) {
+        alert('Camera or model load failed. Ensure HTTPS and models/ are in place.');
+        console.error(e);
       }
     }
 
-    startCamera();
+    init();
 
-    captureBtn.addEventListener("click", () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = camera.videoWidth;
-      canvas.height = camera.videoHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(camera, 0, 0, canvas.width, canvas.height);
+    // Capture → bake text into photo
+    captureBtn.addEventListener('click', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
 
-      const dataUrl = canvas.toDataURL("image/png");
-      capturedImage.src = dataUrl;
-      capturedImage.style.display = "block";
-      camera.style.display = "none";
+      // Draw current camera frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Draw moving text onto canvas (replicate gradient & glow)
+      // Create gradient similar to CSS
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, '#2b0047');
+      grad.addColorStop(0.5, '#7b2cbf');
+      grad.addColorStop(1, '#c77dff');
+
+      // Convert displayed text position back to canvas coordinates
+      // Find current on-screen position
+      const boxW = cameraBox.clientWidth;
+      const boxH = cameraBox.clientHeight;
+      const scaleX = canvas.width / boxW;
+      const scaleY = canvas.height / boxH;
+
+      const rect = movingText.getBoundingClientRect();
+      const parentRect = cameraBox.getBoundingClientRect();
+      const xScreen = rect.left - parentRect.left + rect.width / 2;
+      const yScreen = rect.top - parentRect.top; // baseline adjustment below
+
+      const x = xScreen * scaleX;
+      const y = yScreen * scaleY;
+
+      // Text styling
+      const fontSizePx = Math.max(24, Math.min(56, Math.round(boxW * 0.08)));
+      ctx.font = `800 ${Math.round(fontSizePx * scaleX)}px Poppins, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = grad;
+
+      // Glow
+      ctx.shadowColor = 'rgba(255,215,0,0.6)';
+      ctx.shadowBlur = 20;
+
+      ctx.fillText('CCMI 19th Anniversary', x, y);
+
+      // Export data URL
+      const dataUrl = canvas.toDataURL('image/png');
+      imgPreview.src = dataUrl;
+      imgPreview.style.display = 'block';
+      video.style.display = 'none';
 
       downloadBtn.href = dataUrl;
-      downloadBtn.style.display = "inline-block";
-      retakeBtn.style.display = "inline-block";
-      captureBtn.style.display = "none";
+      downloadBtn.style.display = 'inline-block';
+      retakeBtn.style.display = 'inline-block';
+      captureBtn.style.display = 'none';
+
+      // Pause tracking while preview is shown
+      runTrack = false;
     });
 
-    retakeBtn.addEventListener("click", () => {
-      capturedImage.style.display = "none";
-      camera.style.display = "block";
-      retakeBtn.style.display = "none";
-      downloadBtn.style.display = "none";
-      captureBtn.style.display = "inline-block";
+    // Retake → resume camera & tracking
+    retakeBtn.addEventListener('click', async () => {
+      imgPreview.style.display = 'none';
+      video.style.display = 'block';
+      downloadBtn.style.display = 'none';
+      retakeBtn.style.display = 'none';
+      captureBtn.style.display = 'inline-block';
+
+      if (!stream) await startCamera();
+      runTrack = true;
+      trackFace();
     });
   </script>
 </body>

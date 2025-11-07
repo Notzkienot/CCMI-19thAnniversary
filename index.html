@@ -103,113 +103,131 @@
 
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <script>
-    const video = document.getElementById('camera');
-    const movingText = document.getElementById('movingText');
-    const imgPreview = document.getElementById('capturedImage');
-    const captureBtn = document.getElementById('capture');
-    const retakeBtn = document.getElementById('retake');
-    const downloadBtn = document.getElementById('download');
-    const statusText = document.getElementById('status');
-    const cameraBox = document.getElementById('cameraBox');
+  const video = document.getElementById('camera');
+  const movingText = document.getElementById('movingText');
+  const imgPreview = document.getElementById('capturedImage');
+  const captureBtn = document.getElementById('capture');
+  const retakeBtn = document.getElementById('retake');
+  const downloadBtn = document.getElementById('download');
+  const statusText = document.getElementById('status');
+  const cameraBox = document.getElementById('cameraBox');
 
-    let stream, runTrack = false;
+  let stream, runTrack = false;
+  let currentTextPos = { x: 0, y: 0 };
 
-    async function startCamera() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-        video.srcObject = stream;
-        await video.play();
-        return true;
-      } catch (err) {
-        console.error('Camera error:', err);
-        return false;
-      }
-    }
-
-    async function loadModelsWithRetry(retries = 3) {
-      for (let i = 0; i < retries; i++) {
-        try {
-          console.log("Loading models (attempt " + (i+1) + ")...");
-          await faceapi.nets.tinyFaceDetector.loadFromUri('./models/');
-          await faceapi.nets.faceLandmark68TinyNet.loadFromUri('./models/');
-          console.log("✅ Models loaded successfully!");
-          return true;
-        } catch (e) {
-          console.error("Model load failed (attempt " + (i+1) + "):", e);
-          await new Promise(res => setTimeout(res, 1000));
-        }
-      }
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      video.srcObject = stream;
+      await video.play();
+      return true;
+    } catch (err) {
+      console.error('Camera error:', err);
       return false;
     }
+  }
 
-    function lerp(a, b, t) { return a + (b - a) * t; }
-
-    async function trackFace() {
-      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
-      let tx = cameraBox.clientWidth / 2, ty = cameraBox.clientHeight / 2;
-      const loop = async () => {
-        if (!runTrack) return;
-        const result = await faceapi.detectSingleFace(video, options).withFaceLandmarks(true);
-        if (result?.landmarks) {
-          const nose = result.landmarks.getNose();
-          const cx = result.detection.box.x + result.detection.box.width / 2;
-          const cy = nose[0].y - 80;
-          tx = lerp(tx, cx, 0.25);
-          ty = lerp(ty, cy, 0.25);
-          const scaleX = cameraBox.clientWidth / video.videoWidth;
-          const scaleY = cameraBox.clientHeight / video.videoHeight;
-          movingText.style.left = `${tx * scaleX}px`;
-          movingText.style.top = `${ty * scaleY}px`;
-          movingText.style.transform = 'translate(-50%, -100%)';
-        }
-        requestAnimationFrame(loop);
-      };
-      requestAnimationFrame(loop);
-    }
-
-    captureBtn.onclick = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      const dataURL = canvas.toDataURL('image/png');
-      imgPreview.src = dataURL;
-      imgPreview.style.display = 'block';
-      video.style.display = 'none';
-      runTrack = false;
-      downloadBtn.href = dataURL;
-      downloadBtn.style.display = 'inline-block';
-      retakeBtn.style.display = 'inline-block';
-      captureBtn.style.display = 'none';
-    };
-
-    retakeBtn.onclick = () => {
-      imgPreview.style.display = 'none';
-      video.style.display = 'block';
-      downloadBtn.style.display = 'none';
-      retakeBtn.style.display = 'none';
-      captureBtn.style.display = 'inline-block';
-      runTrack = true;
-      trackFace();
-    };
-
-    async function init() {
-      const modelsLoaded = await loadModelsWithRetry();
-      const cameraReady = await startCamera();
-
-      if (!modelsLoaded || !cameraReady) {
-        statusText.textContent = "❌ Camera or model load failed. Check HTTPS and model filenames.";
-        alert("Camera or model load failed. Check HTTPS and model filenames.");
-        return;
+  async function loadModelsWithRetry(retries = 3) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        console.log("Loading models (attempt " + (i+1) + ")...");
+        await faceapi.nets.tinyFaceDetector.loadFromUri('./models/');
+        await faceapi.nets.faceLandmark68TinyNet.loadFromUri('./models/');
+        console.log("✅ Models loaded successfully!");
+        return true;
+      } catch (e) {
+        console.error("Model load failed (attempt " + (i+1) + "):", e);
+        await new Promise(res => setTimeout(res, 1000));
       }
+    }
+    return false;
+  }
 
-      statusText.textContent = "✅ Models loaded — camera active!";
-      runTrack = true;
-      trackFace();
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  async function trackFace() {
+    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
+    let tx = cameraBox.clientWidth / 2, ty = cameraBox.clientHeight / 2;
+    const loop = async () => {
+      if (!runTrack) return;
+      const result = await faceapi.detectSingleFace(video, options).withFaceLandmarks(true);
+      if (result?.landmarks) {
+        const nose = result.landmarks.getNose();
+        const cx = result.detection.box.x + result.detection.box.width / 2;
+        const cy = nose[0].y - 80;
+        tx = lerp(tx, cx, 0.25);
+        ty = lerp(ty, cy, 0.25);
+        const scaleX = cameraBox.clientWidth / video.videoWidth;
+        const scaleY = cameraBox.clientHeight / video.videoHeight;
+        const x = tx * scaleX;
+        const y = ty * scaleY;
+        currentTextPos = { x, y }; // store latest position
+        movingText.style.left = `${x}px`;
+        movingText.style.top = `${y}px`;
+        movingText.style.transform = 'translate(-50%, -100%)';
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  captureBtn.onclick = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    // Draw video frame
+    ctx.drawImage(video, 0, 0);
+
+    // Draw text on the image
+    const scaleX = video.videoWidth / cameraBox.clientWidth;
+    const scaleY = video.videoHeight / cameraBox.clientHeight;
+    ctx.font = `${80 * scaleY}px Poppins`;
+    ctx.fillStyle = 'gold';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 8;
+    ctx.fillText('CCMI 19th Anniversary', currentTextPos.x * scaleX, currentTextPos.y * scaleY);
+
+    const dataURL = canvas.toDataURL('image/png');
+    imgPreview.src = dataURL;
+    imgPreview.style.display = 'block';
+    video.style.display = 'none';
+    movingText.style.display = 'none'; // hide moving overlay
+    runTrack = false;
+    downloadBtn.href = dataURL;
+    downloadBtn.style.display = 'inline-block';
+    retakeBtn.style.display = 'inline-block';
+    captureBtn.style.display = 'none';
+  };
+
+  retakeBtn.onclick = () => {
+    imgPreview.style.display = 'none';
+    video.style.display = 'block';
+    movingText.style.display = 'block';
+    downloadBtn.style.display = 'none';
+    retakeBtn.style.display = 'none';
+    captureBtn.style.display = 'inline-block';
+    runTrack = true;
+    trackFace();
+  };
+
+  async function init() {
+    const modelsLoaded = await loadModelsWithRetry();
+    const cameraReady = await startCamera();
+
+    if (!modelsLoaded || !cameraReady) {
+      statusText.textContent = "❌ Camera or model load failed. Check HTTPS and model filenames.";
+      alert("Camera or model load failed. Check HTTPS and model filenames.");
+      return;
     }
 
-    init();
-  </script>
+    statusText.textContent = "✅ Models loaded — camera active!";
+    runTrack = true;
+    trackFace();
+  }
+
+  init();
+</script>
 </body>
 </html>

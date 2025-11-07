@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>CCMI 19th Anniversary – Camera with Head-Tracking Text</title>
+  <title>CCMI 19th Anniversary – Arced Head Tracking Filter</title>
   <style>
-    /* --- Page background: dark→light purple with subtle gold sparkle --- */
+    /* --- Background --- */
     body {
       margin: 0;
       height: 100vh;
@@ -13,7 +13,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-family: "Poppins", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-family: "Poppins", system-ui, sans-serif;
       color: #fff;
       background:
         radial-gradient(circle at 15% 10%, rgba(255,215,0,0.22), transparent 38%),
@@ -23,28 +23,13 @@
       overflow: hidden;
       position: relative;
     }
-    body::before {
-      content: "";
-      position: absolute; inset: 0;
-      background-image: radial-gradient(rgba(255,215,0,0.35) 1px, transparent 1px);
-      background-size: 3px 3px;
-      animation: sparkle 4s linear infinite;
-      opacity: 0.25;
-      pointer-events: none;
-      z-index: 0;
-    }
     @keyframes bgMove {
       0% { background-position: 0% 50%; }
       50% { background-position: 100% 50%; }
       100% { background-position: 0% 50%; }
     }
-    @keyframes sparkle {
-      0% { transform: translate(0,0); }
-      50% { transform: translate(-1%, 1%); }
-      100% { transform: translate(0,0); }
-    }
 
-    /* --- Camera box --- */
+    /* --- Camera Container --- */
     .camera-container {
       position: relative;
       width: 92vw;
@@ -52,10 +37,9 @@
       aspect-ratio: 3/4;
       border: 3px solid gold;
       border-radius: 16px;
-      box-shadow: 0 0 30px rgba(255, 215, 0, 0.45);
       overflow: hidden;
       background: #000;
-      z-index: 1;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.45);
     }
     video, img.preview {
       width: 100%;
@@ -65,48 +49,15 @@
     }
     img.preview { display: none; }
 
-    /* --- Moving text overlay that follows your head (DOM element) --- */
-    .moving-text {
+    /* --- Canvas Overlay for Arc Text --- */
+    #filterCanvas {
       position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%); /* centered by default; JS repositions */
-      font-weight: 800;
-      text-align: center;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
-      white-space: nowrap;
-      z-index: 2;
-
-      /* Gradient + shimmer & gold glow */
-      font-size: clamp(18px, 6vw, 32px);
-      background: linear-gradient(135deg, #2b0047, #7b2cbf, #c77dff);
-      background-size: 200% 200%;
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      animation: textGrad 4s ease infinite;
-      text-shadow:
-        0 0 1px rgba(255,215,0,0.6),
-        0 0 8px rgba(255,215,0,0.35);
-    }
-    .moving-text::after {
-      /* Soft golden sweep shimmer */
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(120deg, transparent 0%, rgba(255, 239, 159, 0.45) 50%, transparent 100%);
-      mix-blend-mode: screen;
-      animation: shimmer 2.8s linear infinite;
-      pointer-events: none;
-    }
-    @keyframes textGrad {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    @keyframes shimmer {
-      0% { transform: translateX(-120%); }
-      100% { transform: translateX(120%); }
+      z-index: 3;
     }
 
     /* --- Buttons --- */
@@ -147,8 +98,8 @@
 <body>
   <div class="camera-container" id="cameraBox">
     <video id="camera" autoplay playsinline></video>
+    <canvas id="filterCanvas"></canvas>
     <img id="capturedImage" class="preview" alt="Captured" />
-    <div id="movingText" class="moving-text">CCMI 19th Anniversary</div>
   </div>
 
   <div class="controls">
@@ -159,20 +110,23 @@
 
   <div class="note">Tip: Use HTTPS (Netlify, GitHub Pages, Vercel) for camera access.</div>
 
-  <!-- face-api.js from CDN -->
+  <!-- face-api.js -->
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
   <script>
     const video = document.getElementById('camera');
     const imgPreview = document.getElementById('capturedImage');
-    const movingText = document.getElementById('movingText');
     const captureBtn = document.getElementById('capture');
     const retakeBtn  = document.getElementById('retake');
     const downloadBtn = document.getElementById('download');
     const cameraBox = document.getElementById('cameraBox');
+    const filterCanvas = document.getElementById('filterCanvas');
+    const ctx = filterCanvas.getContext('2d');
 
     let stream;
     let runTrack = false;
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
 
     async function startCamera() {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -181,15 +135,49 @@
       });
       video.srcObject = stream;
       await video.play();
+
+      // Sync canvas with video size
+      filterCanvas.width = cameraBox.clientWidth;
+      filterCanvas.height = cameraBox.clientHeight;
     }
 
     async function loadModels() {
-      // Load models from ./models/
       await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
       await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
     }
 
-    function lerp(a, b, t) { return a + (b - a) * t; }
+    // Draw curved text around head
+    function drawArcText(ctx, text, centerX, centerY, radius, startAngle, endAngle) {
+      const chars = text.split('');
+      const angleRange = endAngle - startAngle;
+      const anglePerChar = angleRange / (chars.length - 1);
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.font = `bold ${Math.round(cameraBox.clientWidth * 0.05)}px Poppins`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const grad = ctx.createLinearGradient(-radius, 0, radius, 0);
+      grad.addColorStop(0, '#2b0047');
+      grad.addColorStop(0.5, '#7b2cbf');
+      grad.addColorStop(1, '#c77dff');
+
+      ctx.fillStyle = grad;
+      ctx.shadowColor = 'rgba(255,215,0,0.6)';
+      ctx.shadowBlur = 15;
+
+      for (let i = 0; i < chars.length; i++) {
+        const angle = startAngle + i * anglePerChar;
+        ctx.save();
+        ctx.rotate(angle);
+        ctx.translate(0, -radius);
+        ctx.fillText(chars[i], 0, 0);
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
 
     async function trackFace() {
       const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
@@ -198,29 +186,28 @@
 
       const loop = async () => {
         if (!runTrack) return;
-
         const result = await faceapi
           .detectSingleFace(video, options)
           .withFaceLandmarks();
 
+        ctx.clearRect(0, 0, filterCanvas.width, filterCanvas.height);
+
         if (result && result.landmarks) {
-          // Use midpoint between eyes as anchor, then place text slightly above
           const leftEye = result.landmarks.getLeftEye();
           const rightEye = result.landmarks.getRightEye();
           const cx = (leftEye[0].x + rightEye[3].x) / 2;
           const cy = (leftEye[0].y + rightEye[3].y) / 2;
 
-          // Smooth motion
           tx = lerp(tx, cx, 0.25);
-          ty = lerp(ty, cy - 40, 0.25); // slightly above eyes
+          ty = lerp(ty, cy - 40, 0.25);
 
-          // Scale from video pixels to displayed box size
           const scaleX = cameraBox.clientWidth / video.videoWidth;
           const scaleY = cameraBox.clientHeight / video.videoHeight;
 
-          movingText.style.left = `${tx * scaleX}px`;
-          movingText.style.top  = `${ty * scaleY}px`;
-          movingText.style.transform = 'translate(-50%, -100%)';
+          const x = tx * scaleX;
+          const y = ty * scaleY;
+
+          drawArcText(ctx, 'CCMI 19th Anniversary', x, y - 20, 120, -Math.PI / 1.3, Math.PI / 1.3);
         }
         requestAnimationFrame(loop);
       };
@@ -241,52 +228,59 @@
 
     init();
 
-    // Capture → bake text into photo
+    // --- Capture with filter ---
     captureBtn.addEventListener('click', () => {
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
+      const ctx2 = canvas.getContext('2d');
 
       // Draw current camera frame
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx2.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Draw moving text onto canvas (replicate gradient & glow)
-      // Create gradient similar to CSS
-      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      grad.addColorStop(0, '#2b0047');
-      grad.addColorStop(0.5, '#7b2cbf');
-      grad.addColorStop(1, '#c77dff');
-
-      // Convert displayed text position back to canvas coordinates
-      // Find current on-screen position
+      // Map face position to canvas scale
       const boxW = cameraBox.clientWidth;
       const boxH = cameraBox.clientHeight;
       const scaleX = canvas.width / boxW;
       const scaleY = canvas.height / boxH;
 
-      const rect = movingText.getBoundingClientRect();
-      const parentRect = cameraBox.getBoundingClientRect();
-      const xScreen = rect.left - parentRect.left + rect.width / 2;
-      const yScreen = rect.top - parentRect.top; // baseline adjustment below
+      // Extract the latest position of the arc from the overlay
+      const radius = 120 * scaleY;
+      const grad = ctx2.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, '#2b0047');
+      grad.addColorStop(0.5, '#7b2cbf');
+      grad.addColorStop(1, '#c77dff');
 
-      const x = xScreen * scaleX;
-      const y = yScreen * scaleY;
+      // Use the latest face-tracked coordinates (approx from middle)
+      const x = boxW / 2 * scaleX;
+      const y = boxH / 2 * scaleY - 120;
 
-      // Text styling
-      const fontSizePx = Math.max(24, Math.min(56, Math.round(boxW * 0.08)));
-      ctx.font = `800 ${Math.round(fontSizePx * scaleX)}px Poppins, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillStyle = grad;
+      ctx2.save();
+      ctx2.translate(x, y);
+      ctx2.font = `bold ${Math.round(boxW * 0.05 * scaleX)}px Poppins`;
+      ctx2.textAlign = 'center';
+      ctx2.textBaseline = 'middle';
+      ctx2.fillStyle = grad;
+      ctx2.shadowColor = 'rgba(255,215,0,0.6)';
+      ctx2.shadowBlur = 15;
 
-      // Glow
-      ctx.shadowColor = 'rgba(255,215,0,0.6)';
-      ctx.shadowBlur = 20;
+      const text = 'CCMI 19th Anniversary';
+      const chars = text.split('');
+      const startAngle = -Math.PI / 1.3;
+      const endAngle = Math.PI / 1.3;
+      const angleRange = endAngle - startAngle;
+      const anglePerChar = angleRange / (chars.length - 1);
 
-      ctx.fillText('CCMI 19th Anniversary', x, y);
+      for (let i = 0; i < chars.length; i++) {
+        const angle = startAngle + i * anglePerChar;
+        ctx2.save();
+        ctx2.rotate(angle);
+        ctx2.translate(0, -radius);
+        ctx2.fillText(chars[i], 0, 0);
+        ctx2.restore();
+      }
+      ctx2.restore();
 
-      // Export data URL
       const dataUrl = canvas.toDataURL('image/png');
       imgPreview.src = dataUrl;
       imgPreview.style.display = 'block';
@@ -297,11 +291,9 @@
       retakeBtn.style.display = 'inline-block';
       captureBtn.style.display = 'none';
 
-      // Pause tracking while preview is shown
       runTrack = false;
     });
 
-    // Retake → resume camera & tracking
     retakeBtn.addEventListener('click', async () => {
       imgPreview.style.display = 'none';
       video.style.display = 'block';

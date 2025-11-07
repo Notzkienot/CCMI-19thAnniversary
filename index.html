@@ -17,6 +17,7 @@
       background: linear-gradient(135deg, #2b0047, #7b2cbf, #c77dff);
       background-size: 400% 400%;
       animation: bgMove 10s ease infinite;
+      overflow: hidden;
     }
     @keyframes bgMove {
       0% { background-position: 0% 50%; }
@@ -119,7 +120,7 @@
 
     async function loadModels() {
       console.log("Loading models...");
-      // Match your exact filenames (tiny versions)
+      // Match EXACT filenames in your models folder
       await faceapi.nets.tinyFaceDetector.loadFromUri('./models/');
       await faceapi.nets.faceLandmark68TinyNet.loadFromUri('./models/');
       console.log("✅ Models loaded successfully!");
@@ -130,21 +131,29 @@
     async function trackFace() {
       const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
       let tx = cameraBox.clientWidth / 2, ty = cameraBox.clientHeight / 2;
+
       const loop = async () => {
         if (!runTrack) return;
-        const result = await faceapi.detectSingleFace(video, options).withFaceLandmarks(true);
+
+        const result = await faceapi
+          .detectSingleFace(video, options)
+          .withFaceLandmarks(true);
+
         if (result?.landmarks) {
           const nose = result.landmarks.getNose();
           const cx = result.detection.box.x + result.detection.box.width / 2;
-          const cy = nose[0].y - 80; // Move text ABOVE the head
+          const cy = nose[0].y - 100; // Move text ABOVE head
+
           tx = lerp(tx, cx, 0.25);
           ty = lerp(ty, cy, 0.25);
+
           const scaleX = cameraBox.clientWidth / video.videoWidth;
           const scaleY = cameraBox.clientHeight / video.videoHeight;
           movingText.style.left = `${tx * scaleX}px`;
           movingText.style.top = `${ty * scaleY}px`;
           movingText.style.transform = 'translate(-50%, -100%)';
         }
+
         requestAnimationFrame(loop);
       };
       requestAnimationFrame(loop);
@@ -161,6 +170,64 @@
         console.error(err);
       }
     }
+
+    // Capture Image
+    captureBtn.addEventListener('click', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, '#2b0047');
+      grad.addColorStop(0.5, '#7b2cbf');
+      grad.addColorStop(1, '#c77dff');
+
+      const boxW = cameraBox.clientWidth;
+      const boxH = cameraBox.clientHeight;
+      const scaleX = canvas.width / boxW;
+      const scaleY = canvas.height / boxH;
+
+      const rect = movingText.getBoundingClientRect();
+      const parentRect = cameraBox.getBoundingClientRect();
+      const xScreen = rect.left - parentRect.left + rect.width / 2;
+      const yScreen = rect.top - parentRect.top;
+
+      const x = xScreen * scaleX;
+      const y = yScreen * scaleY;
+
+      ctx.font = `800 ${Math.round(boxW * 0.08)}px Poppins, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = grad;
+      ctx.shadowColor = 'rgba(255,215,0,0.6)';
+      ctx.shadowBlur = 20;
+      ctx.fillText('CCMI 19th Anniversary', x, y);
+
+      const dataUrl = canvas.toDataURL('image/png');
+      imgPreview.src = dataUrl;
+      imgPreview.style.display = 'block';
+      video.style.display = 'none';
+      downloadBtn.href = dataUrl;
+      downloadBtn.style.display = 'inline-block';
+      retakeBtn.style.display = 'inline-block';
+      captureBtn.style.display = 'none';
+      runTrack = false;
+    });
+
+    // Retake
+    retakeBtn.addEventListener('click', async () => {
+      imgPreview.style.display = 'none';
+      video.style.display = 'block';
+      downloadBtn.style.display = 'none';
+      retakeBtn.style.display = 'none';
+      captureBtn.style.display = 'inline-block';
+      if (!stream) await startCamera();
+      runTrack = true;
+      trackFace();
+    });
 
     init();
   </script>
